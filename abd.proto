@@ -5,9 +5,48 @@ package abd;
 // Defines the service
 service KeyValueStore {
     // Function invoked to send the request
-    rpc set (SetRequest) returns (SetResponse) {}
-    rpc get (GetRequest) returns (GetResponse) {}
+    rpc get_phase (GetPhaseRequest) returns (GetPhaseResponse) {}
+    rpc set_phase (SetPhaseRequest) returns (SetPhaseResponse) {}
 }
+
+message GetPhaseRequest {
+    int32 client = 1;
+    int32 server = 2;
+    int32 request_id = 3;
+    int32 key = 4;
+}
+
+message GetPhaseResponse {
+    int32 client = 1;
+    int32 server = 2;
+    int32 request_id = 3;
+    int32 key = 4;
+    int32 value = 5;
+    int32 local_timestamp = 6;
+    bool is_key_present = 7;
+}
+
+message SetPhaseRequest {
+    int32 client = 1;
+    int32 server = 2;
+    int32 request_id = 3;
+    int32 key = 4;
+    int32 value = 5;
+    int32 local_timestamp = 6;
+}
+
+message SetPhaseResponse {
+    int32 client = 1;
+    int32 server = 2;
+    int32 request_id = 3;
+    int32 key = 4;
+    int32 value = 5;
+    int32 local_timestamp = 6;
+}
+
+
+
+
 
 // The request message containing key and value
 message SetRequest {
