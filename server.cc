@@ -1,8 +1,10 @@
 #include <string>
-
 #include <grpcpp/grpcpp.h>
+#include <fstream>
 #include "abd.grpc.pb.h"
 #include <map>
+#include "json.hpp"
+using json = nlohmann::json;
 
 using grpc::Server;
 using grpc::ServerBuilder;
@@ -101,7 +103,28 @@ void Run(std::string address) {
 }
 
 int main(int argc, char** argv) {
-    Run(argv[1]);
+    
+    if (argc != 2) {
+        std::cerr << "Usage: ./server"  << " Server_Id" << std::endl;
+        return 1;
+    }
+    int server_id = stoi(argv[1]);
+
+    ifstream ifs;
+    ifs.open ("../../config.json", ifstream::in);
+
+    json data = json::parse(ifs);
+    int num_servers = stoi(data.value("num_servers", "0"));
+    if(num_servers <= server_id)
+    {
+        std::cerr << "Invalid server Id! Number of servers = " << num_servers << endl;
+        return 0;
+    }
+
+    string ip_address = data["server_ip_list"][server_id];
+    string port = data["server_port_list"][server_id];
+    string address = ip_address + ":" + port;
+    Run(address);
 
     return 0;
 }

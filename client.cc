@@ -2,10 +2,12 @@
 #include <map>
 #include <vector>
 #include <thread>
+#include <fstream>
 #include <grpcpp/grpcpp.h>
 #include <condition_variable>
 #include "abd.grpc.pb.h"
-
+#include "json.hpp"
+using json = nlohmann::json;
 
 using grpc::Channel;
 using grpc::ClientContext;
@@ -17,9 +19,10 @@ using abd::GetPhaseResponse;
 using abd::SetPhaseRequest;
 using abd::SetPhaseResponse;
 
+using namespace std;
 // Define the number of requests to send and the number of responses to expect
 // TODO: CHANGE
-std::vector<std::string> servers = {"0.0.0.0:3000", "0.0.0.0:3002", "0.0.0.0:3004"};
+std::vector<std::string> servers;// = {"0.0.0.0:3000", "0.0.0.0:3002", "0.0.0.0:3004"};
 const int kExpectedResponses = ((servers.size()/2) + 1);
 
 // Define a global counter for the number of responses received
@@ -169,12 +172,30 @@ void StartSetThread(int key, int value) {
     // std::cout<<"Hi I have received 2 set responses\n"<<set_responses[0].value()<<"\n"<<set_responses[1].value();
 }
 
+void parse_server_address() {
+    ifstream ifs;
+    ifs.open ("../../config.json", ifstream::in);
 
+    json data = json::parse(ifs);
+    int num_servers = stoi(data.value("num_servers", "0"));
+
+    for (int i = 0; i < num_servers ; ++i) {
+        string ip_address = data["server_ip_list"][i];
+        string port = data["server_port_list"][i];
+        string address = ip_address + ":" + port;
+        servers.push_back(address);
+    }
+}
 
 
 int main(int argc, char* argv[]){
 
+    if (argc != 2) {
+        std::cerr << "Usage: ./client"  << " Client_Id" << std::endl;
+        return 1;
+    }
     MY_CLIENT_ID = std::stoi(argv[1]);
+    parse_server_address();
     MY_REQUEST_ID = 1;
 
     char op;
