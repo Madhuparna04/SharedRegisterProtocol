@@ -3,6 +3,7 @@
 #include <vector>
 #include <thread>
 #include <fstream>
+#include <random>
 #include <grpcpp/grpcpp.h>
 #include <condition_variable>
 #include "abd.grpc.pb.h"
@@ -39,6 +40,8 @@ std::condition_variable sresponse_count_cv;
 int MY_CLIENT_ID;
 std::unordered_map<int,int> keyTimestamps;
 int MY_REQUEST_ID;
+int NUM_WRITES = 0;
+int NUM_READS = 0;
 
 class KeyValueStoreClient {
     public:
@@ -172,9 +175,9 @@ void StartSetThread(int key, int value) {
     // std::cout<<"Hi I have received 2 set responses\n"<<set_responses[0].value()<<"\n"<<set_responses[1].value();
 }
 
-void parse_server_address() {
+void parse_server_address(string config_file) {
     ifstream ifs;
-    ifs.open ("../../config.json", ifstream::in);
+    ifs.open (config_file, ifstream::in);
 
     json data = json::parse(ifs);
     int num_servers = stoi(data.value("num_servers", "0"));
@@ -187,25 +190,16 @@ void parse_server_address() {
     }
 }
 
-
-int main(int argc, char* argv[]){
-
-    if (argc != 2) {
-        std::cerr << "Usage: ./client"  << " Client_Id" << std::endl;
-        return 1;
-    }
-    MY_CLIENT_ID = std::stoi(argv[1]);
-    parse_server_address();
-    MY_REQUEST_ID = 1;
-
-    char op;
+void do_read_and_write(char op, int repeat) {
     int key;
     int val;
-    while(1) {
-        std::cout<<"Enter Operation: R/W ";
-        std::cin>>op;
-        std::cout<<"Enter key: ";
-        std::cin>>key;
+    std::random_device dev;
+    std::mt19937 rng(dev());
+    std::uniform_int_distribution<std::mt19937::result_type> dist(1,100); 
+    for(int i = 0; i < repeat ; ++i) {
+
+        key = dist(rng);
+        val = dist(rng);
 
         // Start of Get Phase
         StartGetThread(key);
@@ -245,13 +239,29 @@ int main(int argc, char* argv[]){
             std::cout<<"Write complete.\n";
         } else {
             std::cout<<"Invalid Operation, terminating client.\n";
-            return 0;
+            return;
         }
         
         get_responses.clear();
         set_responses.clear();
         MY_REQUEST_ID++;
     }
+}
+
+int main(int argc, char* argv[]){
+
+    if (argc != 5) {
+        std::cerr << "Usage: ./client"  << " <Client_Id> <Config_file> <NUM_WRITES> <NUM_READS>" << std::endl;
+        return 1;
+    }
+    MY_CLIENT_ID = std::stoi(argv[1]);
+    parse_server_address(argv[2]);
+    NUM_WRITES = std::stoi(argv[3]);
+    NUM_READS = std::stoi(argv[4]);
+    MY_REQUEST_ID = 1;
+
+    do_read_and_write('W', NUM_WRITES);
+    do_read_and_write('R', NUM_READS);
 
     return 0;
 }

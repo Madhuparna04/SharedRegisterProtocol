@@ -21,6 +21,7 @@ using namespace std;
 
 unordered_map<int,int> keyValueStore;
 unordered_map<int,int> lastUpdatedStore;
+int SERVER_ID;
 
 class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
 
@@ -49,7 +50,7 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         response->set_server(server);
         response->set_request_id(request_id);
         response->set_key(key);
-        std::cout<<"Sending val for key "<<key<<" = "<<val<<"\n";
+        std::cout<< "Server "<< SERVER_ID <<": Sending val for key "<<key<<" = "<<val<<"\n";
         response->set_value(val);
         response->set_local_timestamp(lastUpdated);
         return Status::OK;
@@ -77,7 +78,7 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
             lastUpdatedStore[key] = client_timestamp;
         }
 
-        std::cout<<"Sending val for key "<<key<<" = "<<final_value<<"\n";
+        std::cout<< "Server "<< SERVER_ID <<": Sending val for key .."<<key<<" = "<<final_value<<"\n";
         response->set_client(client);
         response->set_server(server);
         response->set_request_id(request_id);
@@ -104,25 +105,26 @@ void Run(std::string address) {
 
 int main(int argc, char** argv) {
     
-    if (argc != 2) {
-        std::cerr << "Usage: ./server"  << " Server_Id" << std::endl;
+    if (argc != 3) {
+        std::cerr << "Usage: ./server"  << " <SERVER_ID>" << " <Config_File>"<< std::endl;
         return 1;
     }
-    int server_id = stoi(argv[1]);
+    SERVER_ID = stoi(argv[1]);
+    string config_file = argv[2];
 
     ifstream ifs;
-    ifs.open ("../../config.json", ifstream::in);
+    ifs.open (config_file, ifstream::in);
 
     json data = json::parse(ifs);
     int num_servers = stoi(data.value("num_servers", "0"));
-    if(num_servers <= server_id)
+    if(num_servers <= SERVER_ID)
     {
         std::cerr << "Invalid server Id! Number of servers = " << num_servers << endl;
         return 0;
     }
 
-    string ip_address = data["server_ip_list"][server_id];
-    string port = data["server_port_list"][server_id];
+    string ip_address = data["server_ip_list"][SERVER_ID];
+    string port = data["server_port_list"][SERVER_ID];
     string address = ip_address + ":" + port;
     Run(address);
 
