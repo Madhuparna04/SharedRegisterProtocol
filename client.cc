@@ -226,17 +226,14 @@ void do_read_and_write(char op, int repeat) {
 
                 // Start Set Phase
                 StartSetThread(key, value_read);
-                std::cout<<"R: value for key = "<<key<<" is "<<value_read<<"\n";
+                std::cout<<"Client Id "<<MY_CLIENT_ID<<": R: value for key = "<<key<<" is "<<value_read<<"Op No. "<<i<<"\n";
             } else {
-                std::cout<<"R: key = "<<key<<" is not present. \n";
+                std::cout<<"Client Id "<<MY_CLIENT_ID<<": R: key = "<<key<<" is not present."<<"Op No. "<< i << "\n";
             }
         } else if(op == 'W'){
-            std::cout<<"Enter value: ";
-            std::cin>>val;
-            
             // Start Set Phase
             StartSetThread(key, val);
-            std::cout<<"Write complete.\n";
+            std::cout<<"Client Id "<<MY_CLIENT_ID<<": Write complete for key = "<<key<<" Value = "<< val<<" Op No."<<i<<"\n";
         } else {
             std::cout<<"Invalid Operation, terminating client.\n";
             return;
