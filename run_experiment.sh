@@ -14,13 +14,15 @@ do
     ./cmake/build/client $((i-1)) config.json 100 0 &
 done
 
+sleep 5
+
 total=$((num_writer + num_reader -1))
 for i in $(eval echo "{$num_writer..$total}")
 do
     ./cmake/build/client $i config.json 0 100 &
 done
 
-sleep 20
+sleep 10
 
 server_pid=`pgrep server`
 

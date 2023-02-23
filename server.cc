@@ -30,7 +30,6 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         int server = request->server();
         int request_id = request->request_id();
         int key = request->key();
-
         int val = 0;
         int lastUpdated = 0;
         if(keyValueStore.find(key) != keyValueStore.end()) {
@@ -38,6 +37,7 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
             response->set_is_key_present(true);
         } else {
             // Key is not present already - so get phase will return nothing
+            response->set_request_id(request_id);
             response->set_is_key_present(false);
             return Status::OK;
         }
@@ -50,7 +50,6 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         response->set_server(server);
         response->set_request_id(request_id);
         response->set_key(key);
-        std::cout<< "Server "<< SERVER_ID <<": Sending val for key "<<key<<" = "<<val<<"\n";
         response->set_value(val);
         response->set_local_timestamp(lastUpdated);
         return Status::OK;
@@ -78,7 +77,6 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
             lastUpdatedStore[key] = client_timestamp;
         }
 
-        std::cout<< "Server "<< SERVER_ID <<": Sending val for key .."<<key<<" = "<<final_value<<"\n";
         response->set_client(client);
         response->set_server(server);
         response->set_request_id(request_id);

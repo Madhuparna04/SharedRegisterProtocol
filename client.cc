@@ -39,7 +39,7 @@ std::condition_variable sresponse_count_cv;
 // TODO: Take from ARGS/develop a class
 int MY_CLIENT_ID;
 std::unordered_map<int,int> keyTimestamps;
-int MY_REQUEST_ID;
+int MY_REQUEST_ID = 0;
 int NUM_WRITES = 0;
 int NUM_READS = 0;
 
@@ -98,29 +98,23 @@ class KeyValueStoreClient {
 
 void HandleGetPhaseResponse(const GetPhaseResponse& response) {
     // Increment the response count
-    std::unique_lock<std::mutex> glock(gresponse_mutex);
+    //std::unique_lock<std::mutex> glock(gresponse_mutex);
     // std::cout<<"New response came. Adding to the vector "<<"\n";
-    get_responses.push_back(response);
+    if (response.request_id() == MY_REQUEST_ID)
+        get_responses.push_back(response);
     // Notify all waiting threads if we have received the expected number of responses
-    if (get_responses.size() == kExpectedResponses) {
-        // std::cout<<"I am get notifying\n";
-        gresponse_count_cv.notify_all();
-    }
 }
 
 void HandleSetPhaseResponse(const SetPhaseResponse& response) {
     // Increment the response count
-    std::unique_lock<std::mutex> slock(sresponse_mutex);
+    //std::unique_lock<std::mutex> slock(sresponse_mutex);
     // std::cout<<"New response came. Adding to the vector "<<"\n";
-    set_responses.push_back(response);
+    if (response.request_id() == MY_REQUEST_ID)
+        set_responses.push_back(response);
     // Notify all waiting threads if we have received the expected number of responses
-    if (set_responses.size() == kExpectedResponses) {
-        // std::cout<<"I am set notifying\n";
-        sresponse_count_cv.notify_all();
-    }
 }
 
-void RunGetPhase(std::vector<std::string> servers, int client_id, int requestId, int key) {
+bool RunGetPhase(std::vector<std::string> servers, int client_id, int requestId, int key) {
     for(int i = 0; i < servers.size(); i++) {
         KeyValueStoreClient client(
             grpc::CreateChannel(
@@ -131,12 +125,17 @@ void RunGetPhase(std::vector<std::string> servers, int client_id, int requestId,
 
         // std::cout<<"Sending get phase request "<<i<<"\n";
         GetPhaseResponse response = client.get_phase(client_id, i, requestId, key);
-        HandleGetPhaseResponse(response);
+        HandleGetPhaseResponse(response);          
     }
+    if (get_responses.size() == kExpectedResponses) {
+        // std::cout<<"I am set notifying\n";
+        return true;
+    }
+    return false;
 }
 
 
-void RunSetPhase(std::vector<std::string> servers, int client_id, int requestId, int key, int value, int local_timestamp) {
+bool RunSetPhase(std::vector<std::string> servers, int client_id, int requestId, int key, int value, int local_timestamp) {
     for(int i = 0; i < servers.size(); i++) {
         KeyValueStoreClient client(
             grpc::CreateChannel(
@@ -149,13 +148,18 @@ void RunSetPhase(std::vector<std::string> servers, int client_id, int requestId,
         SetPhaseResponse response = client.set_phase(client_id, i, requestId, key, value, local_timestamp);
         HandleSetPhaseResponse(response);
     }
+    if (set_responses.size() == kExpectedResponses) {
+        // std::cout<<"I am get notifying\n";
+        return true;
+    }
+    return false;
 }
 
 
 void StartGetThread(int key) {
     //std::thread getPhaseThread(RunGetPhase, servers, MY_CLIENT_ID, MY_REQUEST_ID, key);
     RunGetPhase(servers, MY_CLIENT_ID, MY_REQUEST_ID, key);
-    std::unique_lock<std::mutex> glock(gresponse_mutex);
+    //std::unique_lock<std::mutex> glock(gresponse_mutex);
     // This keeps releasing the lock until the condition is false - 
     // and keeps holding it once it is fulfilled - so other threads 
     // are unable to modify anything
@@ -168,7 +172,7 @@ void StartSetThread(int key, int value) {
     // Write back phase
     //std::thread setPhaseThread(RunSetPhase, servers, MY_CLIENT_ID, MY_REQUEST_ID, key, value, keyTimestamps[key]);
     RunSetPhase(servers, MY_CLIENT_ID, MY_REQUEST_ID, key, value, keyTimestamps[key]);
-    std::unique_lock<std::mutex> slock(sresponse_mutex);
+    //std::unique_lock<std::mutex> slock(sresponse_mutex);
     // This keeps releasing the lock until the condition is false - 
     // and keeps holding it once it is fulfilled - so other threads 
     // are unable to modify anything
@@ -220,7 +224,7 @@ void do_read_and_write(char op, int repeat) {
 
         // Local timestamp changes to max + 1 for the key
         keyTimestamps[key] = max_timestamp + 1;
-
+        MY_REQUEST_ID++;
         if(op == 'R') {
             if(isKeyPresentInAny) {
                 // Value corresponding to the largest timestamp among majority
@@ -228,9 +232,9 @@ void do_read_and_write(char op, int repeat) {
 
                 // Start Set Phase
                 StartSetThread(key, value_read);
-                std::cout<<"Client Id "<<MY_CLIENT_ID<<": R: value for key = "<<key<<" is "<<value_read<<"Op No. "<<i<<"\n";
+                std::cout<<"Client Id "<<MY_CLIENT_ID<<": R: value for key = "<<key<<" is "<<value_read<<" Op No. "<<i<<"\n";
             } else {
-                std::cout<<"Client Id "<<MY_CLIENT_ID<<": R: key = "<<key<<" is not present."<<"Op No. "<< i << "\n";
+                std::cout<<"Client Id "<<MY_CLIENT_ID<<": R: key = "<<key<<" is not present."<<" Op No. "<< i << "\n";
             }
         } else if(op == 'W'){
             // Start Set Phase
