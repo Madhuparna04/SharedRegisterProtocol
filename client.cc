@@ -153,25 +153,27 @@ void RunSetPhase(std::vector<std::string> servers, int client_id, int requestId,
 
 
 void StartGetThread(int key) {
-    std::thread getPhaseThread(RunGetPhase, servers, MY_CLIENT_ID, MY_REQUEST_ID, key);
+    //std::thread getPhaseThread(RunGetPhase, servers, MY_CLIENT_ID, MY_REQUEST_ID, key);
+    RunGetPhase(servers, MY_CLIENT_ID, MY_REQUEST_ID, key);
     std::unique_lock<std::mutex> glock(gresponse_mutex);
     // This keeps releasing the lock until the condition is false - 
     // and keeps holding it once it is fulfilled - so other threads 
     // are unable to modify anything
-    gresponse_count_cv.wait(glock, []{return get_responses.size() == kExpectedResponses;});
-    getPhaseThread.detach();
+    //gresponse_count_cv.wait(glock, []{return get_responses.size() == kExpectedResponses;});
+    //getPhaseThread.detach();
     // std::cout<<"Ending Get Phase for Key = \n"<<key;
 }
 
 void StartSetThread(int key, int value) {
     // Write back phase
-    std::thread setPhaseThread(RunSetPhase, servers, MY_CLIENT_ID, MY_REQUEST_ID, key, value, keyTimestamps[key]);
+    //std::thread setPhaseThread(RunSetPhase, servers, MY_CLIENT_ID, MY_REQUEST_ID, key, value, keyTimestamps[key]);
+    RunSetPhase(servers, MY_CLIENT_ID, MY_REQUEST_ID, key, value, keyTimestamps[key]);
     std::unique_lock<std::mutex> slock(sresponse_mutex);
     // This keeps releasing the lock until the condition is false - 
     // and keeps holding it once it is fulfilled - so other threads 
     // are unable to modify anything
-    sresponse_count_cv.wait(slock, []{return set_responses.size() == kExpectedResponses;});
-    setPhaseThread.detach();
+    //sresponse_count_cv.wait(slock, []{return set_responses.size() == kExpectedResponses;});
+    //setPhaseThread.detach();
     // std::cout<<"Hi I have received 2 set responses\n"<<set_responses[0].value()<<"\n"<<set_responses[1].value();
 }
 

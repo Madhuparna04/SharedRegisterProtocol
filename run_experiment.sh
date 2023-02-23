@@ -14,7 +14,7 @@ do
     ./cmake/build/client $((i-1)) config.json 100 0 &
 done
 
-total=$((num_writer + num_reader))
+total=$((num_writer + num_reader -1))
 for i in $(eval echo "{$num_writer..$total}")
 do
     ./cmake/build/client $i config.json 0 100 &
