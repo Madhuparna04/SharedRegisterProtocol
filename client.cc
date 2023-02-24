@@ -4,6 +4,7 @@
 #include <thread>
 #include <fstream>
 #include <random>
+#include <mutex>
 #include <grpcpp/grpcpp.h>
 #include <condition_variable>
 #include "abd.grpc.pb.h"
@@ -13,6 +14,8 @@ using json = nlohmann::json;
 using grpc::Channel;
 using grpc::ClientContext;
 using grpc::Status;
+using grpc::ClientAsyncResponseReader;
+using grpc::CompletionQueue;
 
 using abd::KeyValueStore;
 using abd::GetPhaseRequest;
@@ -21,16 +24,15 @@ using abd::SetPhaseRequest;
 using abd::SetPhaseResponse;
 
 using namespace std;
-// Define the number of requests to send and the number of responses to expect
-// TODO: CHANGE
-std::vector<std::string> servers;// = {"0.0.0.0:3000", "0.0.0.0:3002", "0.0.0.0:3004"};
-const int kExpectedResponses = ((servers.size()/2) + 1);
+
+std::vector<std::string> servers;
+int kExpectedResponses;
 
 // Define a global counter for the number of responses received
 std::vector<GetPhaseResponse> get_responses;
 std::vector<SetPhaseResponse> set_responses;
 
-// Define a mutex and condition variable to synchronize access to response_count
+// Define a mutex
 std::mutex gresponse_mutex;
 std::mutex sresponse_mutex;
 std::condition_variable gresponse_count_cv;
@@ -47,33 +49,45 @@ class KeyValueStoreClient {
     public:
         KeyValueStoreClient(std::shared_ptr<Channel> channel) : stub_(KeyValueStore::NewStub(channel)) {}
 
-    GetPhaseResponse get_phase(int client, int server, int requestId, int key) {
-        GetPhaseResponse response;
-        GetPhaseRequest request;
-        ClientContext context;
+    void GetPhase(int client, int server, int requestId, int key, std::function<void(const GetPhaseResponse&)> callback) {
 
+        GetPhaseRequest request;
         request.set_client(client);
         request.set_server(server);
         request.set_request_id(requestId);
         request.set_key(key);
 
-        Status status = stub_->get_phase(&context, request, &response);
-
-        return response;
-
-        // if(status.ok()){
-        //     return response;
-        // } else {
-        //     std::cout << status.error_code() << ": " << status.error_message() << std::endl;
-        //     return response;
-        // }
-    }
-
-    SetPhaseResponse set_phase(int client, int server, int requestId, int key, int value, int local_timestamp) {
-        SetPhaseResponse response;
-        SetPhaseRequest request;
+        CompletionQueue cq;
         ClientContext context;
 
+        // Make the asynchronous call
+        auto response_reader = stub_->AsyncGetPhase(&context, request, &cq);
+
+        // Provide a tag object to be passed to the callback function
+        void* tag = (void*) new CallbackTagGetPhase(callback);
+
+        // Set up the callback function to be called when the response is received
+        // Tag has the callback function
+        response_reader->Finish(&response_get_, &status_, tag);
+
+        // Wait for the response to be received
+        void* got_tag;
+        bool ok = false;
+        while (cq.Next(&got_tag, &ok)) {
+            if (ok) {
+                // Call the callback function with the retrieved value
+                CallbackTagGetPhase* callback_tag = static_cast<CallbackTagGetPhase*>(got_tag);
+
+                // Response object passed to callback function here
+                (callback_tag->callback)(response_get_);
+                delete callback_tag;
+                break;
+            }
+        }
+    }
+
+    void SetPhase(int client, int server, int requestId, int key, int value, int local_timestamp, std::function<void(const SetPhaseResponse&)> callback) {
+        SetPhaseRequest request;
         request.set_client(client);
         request.set_server(server);
         request.set_request_id(requestId);
@@ -81,41 +95,87 @@ class KeyValueStoreClient {
         request.set_value(value);
         request.set_local_timestamp(local_timestamp);
 
-        Status status = stub_->set_phase(&context, request, &response);
-        return response;
+        ClientContext context;
+        CompletionQueue cq;
 
-        // if(status.ok()){
-        //     return response;
-        // } else {
-        //     std::cout << status.error_code() << ": " << status.error_message() << std::endl;
-        //     return response;
-        // }
+        // Make the asynchronous call
+        auto response_reader = stub_->AsyncSetPhase(&context, request, &cq);
+
+        // Provide a tag object to be passed to the callback function
+        void* tag = (void*) new CallbackTagSetPhase(callback);
+
+        // Set up the callback function to be called when the response is received
+        // Tag has the callback function
+        response_reader->Finish(&response_set_, &status_, tag);
+
+        // Wait for the response to be received
+        void* got_tag;
+        bool ok = false;
+        while (cq.Next(&got_tag, &ok)) {
+            if (ok) {
+                // Call the callback function with the retrieved value
+                CallbackTagSetPhase* callback_tag = static_cast<CallbackTagSetPhase*>(got_tag);
+
+                // Response object passed to callback function here
+                (callback_tag->callback)(response_set_);
+                delete callback_tag;
+                break;
+            }
+        }
     }
 
     private:
         std::unique_ptr<KeyValueStore::Stub> stub_;
+        GetPhaseResponse response_get_;
+        SetPhaseResponse response_set_;
+        Status status_;
+
+        // The tag object to be passed to the callback function
+        class CallbackTagGetPhase {
+            public:
+                CallbackTagGetPhase(std::function<void(const GetPhaseResponse&)> cb) : callback(cb) {}
+                std::function<void(const GetPhaseResponse&)> callback;
+        };
+
+        // The tag object to be passed to the callback function
+        class CallbackTagSetPhase {
+            public:
+                CallbackTagSetPhase(std::function<void(const SetPhaseResponse&)> cb) : callback(cb) {}
+                std::function<void(const SetPhaseResponse&)> callback;
+        };
 };
 
 void HandleGetPhaseResponse(const GetPhaseResponse& response) {
-    // Increment the response count
-    //std::unique_lock<std::mutex> glock(gresponse_mutex);
-    // std::cout<<"New response came. Adding to the vector "<<"\n";
-    if (response.request_id() == MY_REQUEST_ID)
+    if (response.request_id() == MY_REQUEST_ID) {
+        // Lock for accesing the get_responses vector bec it is accessed by many threads
+        std::cout<<"Client ID "<<MY_CLIENT_ID<<": Recieved get response for "<<MY_REQUEST_ID<<"\n";
         get_responses.push_back(response);
-    // Notify all waiting threads if we have received the expected number of responses
+
+        if(get_responses.size() == kExpectedResponses) {
+            // Signal - main thread will resume execution now
+            gresponse_mutex.unlock();
+            std::cout<<"Client ID "<<MY_CLIENT_ID<<" Now ending get phase "<<MY_REQUEST_ID<<"\n";
+        }
+    }
 }
 
 void HandleSetPhaseResponse(const SetPhaseResponse& response) {
-    // Increment the response count
-    //std::unique_lock<std::mutex> slock(sresponse_mutex);
-    // std::cout<<"New response came. Adding to the vector "<<"\n";
-    if (response.request_id() == MY_REQUEST_ID)
+    if (response.request_id() == MY_REQUEST_ID) {
+        // Lock for accesing the get_responses vector bec it is accessed by many threads
+        std::cout<<"Client ID "<<MY_CLIENT_ID<<" Recieved set response for "<<MY_REQUEST_ID<<"\n";
         set_responses.push_back(response);
-    // Notify all waiting threads if we have received the expected number of responses
+
+        if(set_responses.size() == kExpectedResponses) {
+            // Signal - main thread will resume execution now
+            sresponse_mutex.unlock();
+            std::cout<<"Client ID "<<MY_CLIENT_ID<<" Now ending set phase "<<MY_REQUEST_ID<<"\n";
+        }
+    }
 }
 
-bool RunGetPhase(std::vector<std::string> servers, int client_id, int requestId, int key) {
-    for(int i = 0; i < servers.size(); i++) {
+void RunGetPhase(std::vector<std::string> servers, int client_id, int requestId, int key) {
+    // Second check is added to stop sending more requests after enough responses are collected
+    for(int i = 0; i < servers.size() && get_responses.size() < kExpectedResponses; i++) {
         KeyValueStoreClient client(
             grpc::CreateChannel(
                 servers[i], 
@@ -123,63 +183,34 @@ bool RunGetPhase(std::vector<std::string> servers, int client_id, int requestId,
             )
         );
 
-        // std::cout<<"Sending get phase request "<<i<<"\n";
-        GetPhaseResponse response = client.get_phase(client_id, i, requestId, key);
-        HandleGetPhaseResponse(response);          
+        std::cout<<"Client ID "<<MY_CLIENT_ID<<"Sending <<"<<i<<" get request for request ID "<<requestId<<"\n";
+        client.GetPhase(client_id, i, requestId, key, HandleGetPhaseResponse);         
     }
-    if (get_responses.size() == kExpectedResponses) {
-        // std::cout<<"I am set notifying\n";
-        return true;
-    }
-    return false;
 }
 
 
-bool RunSetPhase(std::vector<std::string> servers, int client_id, int requestId, int key, int value, int local_timestamp) {
-    for(int i = 0; i < servers.size(); i++) {
+void RunSetPhase(std::vector<std::string> servers, int client_id, int requestId, int key, int value, int local_timestamp) {
+    // Second check is added to stop sending more requests after enough responses are collected
+    for(int i = 0; i < servers.size() && set_responses.size() < kExpectedResponses; i++) {
         KeyValueStoreClient client(
             grpc::CreateChannel(
                 servers[i], 
                 grpc::InsecureChannelCredentials()
             )
         );
-
-        // std::cout<<"Sending set phase request "<<i<<"\n";
-        SetPhaseResponse response = client.set_phase(client_id, i, requestId, key, value, local_timestamp);
-        HandleSetPhaseResponse(response);
+        std::cout<<"Client ID "<<MY_CLIENT_ID<<" Sending <<"<<i<<" set request for request ID "<<requestId<<"\n";
+        client.SetPhase(client_id, i, requestId, key, value, local_timestamp, HandleSetPhaseResponse);
     }
-    if (set_responses.size() == kExpectedResponses) {
-        // std::cout<<"I am get notifying\n";
-        return true;
-    }
-    return false;
 }
-
 
 void StartGetThread(int key) {
-    //std::thread getPhaseThread(RunGetPhase, servers, MY_CLIENT_ID, MY_REQUEST_ID, key);
     RunGetPhase(servers, MY_CLIENT_ID, MY_REQUEST_ID, key);
-    //std::unique_lock<std::mutex> glock(gresponse_mutex);
-    // This keeps releasing the lock until the condition is false - 
-    // and keeps holding it once it is fulfilled - so other threads 
-    // are unable to modify anything
-    //gresponse_count_cv.wait(glock, []{return get_responses.size() == kExpectedResponses;});
-    //getPhaseThread.detach();
-    // std::cout<<"Ending Get Phase for Key = \n"<<key;
 }
 
-void StartSetThread(int key, int value) {
-    // Write back phase
-    //std::thread setPhaseThread(RunSetPhase, servers, MY_CLIENT_ID, MY_REQUEST_ID, key, value, keyTimestamps[key]);
-    RunSetPhase(servers, MY_CLIENT_ID, MY_REQUEST_ID, key, value, keyTimestamps[key]);
-    //std::unique_lock<std::mutex> slock(sresponse_mutex);
-    // This keeps releasing the lock until the condition is false - 
-    // and keeps holding it once it is fulfilled - so other threads 
-    // are unable to modify anything
-    //sresponse_count_cv.wait(slock, []{return set_responses.size() == kExpectedResponses;});
-    //setPhaseThread.detach();
-    // std::cout<<"Hi I have received 2 set responses\n"<<set_responses[0].value()<<"\n"<<set_responses[1].value();
+void StartSetThread(int key, int val) {
+    RunSetPhase(servers, MY_CLIENT_ID, MY_REQUEST_ID, key, val, keyTimestamps[key]);
 }
+
 
 void parse_server_address(string config_file) {
     ifstream ifs;
@@ -194,6 +225,8 @@ void parse_server_address(string config_file) {
         string address = ip_address + ":" + port;
         servers.push_back(address);
     }
+
+    kExpectedResponses = ((servers.size()/2) + 1);
 }
 
 void do_read_and_write(char op, int repeat) {
@@ -201,21 +234,35 @@ void do_read_and_write(char op, int repeat) {
     int val;
     std::random_device dev;
     std::mt19937 rng(dev());
-    std::uniform_int_distribution<std::mt19937::result_type> dist(1,100); 
-    for(int i = 0; i < repeat ; ++i) {
+    std::uniform_int_distribution<std::mt19937::result_type> dist(1,1e6); 
 
-        key = dist(rng);
+    for(int i = 0; i < repeat ; ++i) {
+        
+        std::cout<<"====Starting new request====\n";
+        key = dist(rng);    
         val = dist(rng);
 
         // Start of Get Phase
-        StartGetThread(key);
+        std::thread get_phase_thread(StartGetThread, key); 
+        {
+            cout<<"Get lock 1"<<endl;
+            gresponse_mutex.lock();
+            cout<<"Got lock 1"<<endl;
+        };
+
+        // std::cout<<"Main is waiting for the Get signal\n";
+        cout<<"Get lock 2"<<endl;
+        gresponse_mutex.lock();
+        cout<<"Got lock 2"<<endl;
+
+        get_phase_thread.detach();
+        // std::cout<<"Main Received Get signal - releasing lock\n";
+        gresponse_mutex.unlock();
 
         // Find largest timestamp among received responses
-        bool isKeyPresentInAny = false;
         int max_timestamp = -100;
         int max_in = -1;
         for(int i = 0; i < get_responses.size(); i++) {
-            isKeyPresentInAny |= get_responses[i].is_key_present();
             if(get_responses[i].local_timestamp() > max_timestamp) {
                 max_timestamp = get_responses[i].local_timestamp();
                 max_in = i;
@@ -225,29 +272,52 @@ void do_read_and_write(char op, int repeat) {
         // Local timestamp changes to max + 1 for the key
         keyTimestamps[key] = max_timestamp + 1;
         MY_REQUEST_ID++;
-        if(op == 'R') {
-            if(isKeyPresentInAny) {
-                // Value corresponding to the largest timestamp among majority
-                int value_read = get_responses[max_in].value();
 
-                // Start Set Phase
-                StartSetThread(key, value_read);
-                std::cout<<"Client Id "<<MY_CLIENT_ID<<": R: value for key = "<<key<<" is "<<value_read<<" Op No. "<<i<<"\n";
-            } else {
-                std::cout<<"Client Id "<<MY_CLIENT_ID<<": R: key = "<<key<<" is not present."<<" Op No. "<< i << "\n";
-            }
+        if(op == 'R') {
+
+            int value_read = get_responses[max_in].value();
+
+            // Start Set Phase in a thread
+            std::thread set_phase_thread(StartSetThread, key, value_read);
+            {
+                cout<<"Get lock 3"<<endl;
+                sresponse_mutex.lock();
+                cout<<"Got lock 3"<<endl;
+            };
+
+            // std::cout<<"Main is waiting for the Set signal\n";
+            cout<<"Get lock 4"<<endl;
+            sresponse_mutex.lock();
+            cout<<"Got lock 4"<<endl;
+            // std::cout<<"Main Received Set signal - releasing lock\n";
+            sresponse_mutex.unlock();
+
+            std::cout<<"Client Id "<<MY_CLIENT_ID<<": Read complete for Request ID "<<MY_REQUEST_ID<<" key = "<<key<<" value = "<<value_read<<"\n";
+            set_phase_thread.detach();
         } else if(op == 'W'){
-            // Start Set Phase
-            StartSetThread(key, val);
-            std::cout<<"Client Id "<<MY_CLIENT_ID<<": Write complete for key = "<<key<<" Value = "<< val<<" Op No."<<i<<"\n";
-        } else {
-            std::cout<<"Invalid Operation, terminating client.\n";
-            return;
-        }
-        
+            // Start Set Phase in a thread
+            std::thread set_phase_thread(StartSetThread, key, val);
+            {
+                cout<<"Get lock 4"<<endl;
+                sresponse_mutex.lock();
+                cout<<"Got lock 4"<<endl;
+            };
+
+            // std::cout<<"Main is waiting for the Set signal\n";
+            cout<<"Get lock 5"<<endl;
+            sresponse_mutex.lock();
+            set_phase_thread.detach();
+            cout<<"Got lock 5"<<endl;
+            // std::cout<<"Main Received Set signal - releasing lock\n";
+            sresponse_mutex.unlock();
+
+            std::cout<<"Client Id "<<MY_CLIENT_ID<<": Write complete for Request ID "<<MY_REQUEST_ID<<" key = "<<key<<" value = "<<val<<"\n";
+            
+        } 
+
+        MY_REQUEST_ID++;
         get_responses.clear();
         set_responses.clear();
-        MY_REQUEST_ID++;
     }
 }
 
