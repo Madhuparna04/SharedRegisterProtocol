@@ -5,8 +5,8 @@ package abd;
 // Defines the service
 service KeyValueStore {
     // Function invoked to send the request
-    rpc get_phase (GetPhaseRequest) returns (GetPhaseResponse) {}
-    rpc set_phase (SetPhaseRequest) returns (SetPhaseResponse) {}
+    rpc GetPhase (GetPhaseRequest) returns (GetPhaseResponse) {}
+    rpc SetPhase (SetPhaseRequest) returns (SetPhaseResponse) {}
 }
 
 message GetPhaseRequest {

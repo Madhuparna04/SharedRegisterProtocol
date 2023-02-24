@@ -25,7 +25,7 @@ int SERVER_ID;
 
 class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
 
-    Status get_phase(ServerContext* context, const GetPhaseRequest* request, GetPhaseResponse* response) {
+    Status GetPhase(ServerContext* context, const GetPhaseRequest* request, GetPhaseResponse* response) {
         int client = request->client();
         int server = request->server();
         int request_id = request->request_id();
@@ -55,7 +55,7 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         return Status::OK;
     }
 
-    Status set_phase(ServerContext* context, const SetPhaseRequest* request, SetPhaseResponse* response) {
+    Status SetPhase(ServerContext* context, const SetPhaseRequest* request, SetPhaseResponse* response) {
         int client = request->client();
         int server = request->server();
         int request_id = request->request_id();
