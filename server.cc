@@ -30,21 +30,10 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         int server = request->server();
         int request_id = request->request_id();
         int key = request->key();
-        int val = 0;
-        int lastUpdated = 0;
-        if(keyValueStore.find(key) != keyValueStore.end()) {
-            val = keyValueStore[key];
-            response->set_is_key_present(true);
-        } else {
-            // Key is not present already - so get phase will return nothing
-            response->set_request_id(request_id);
-            response->set_is_key_present(false);
-            return Status::OK;
-        }
 
-        if(lastUpdatedStore.find(key) != lastUpdatedStore.end()) {
-            lastUpdated = lastUpdatedStore[key];
-        }
+        // Assuming all keys are present
+        int val = keyValueStore[key];
+        int lastUpdated = lastUpdatedStore[key];
 
         response->set_client(client);
         response->set_server(server);
@@ -62,14 +51,11 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         int key = request->key();
         int value = request->value();
         int client_timestamp = request->local_timestamp();
-        int final_value = -1;
 
-        int lastUpdated = -1;
-        if(lastUpdatedStore.find(lastUpdated) != lastUpdatedStore.end()) {
-            lastUpdated = lastUpdatedStore[key];
-            final_value = keyValueStore[key];
-        }
 
+        int lastUpdated = lastUpdatedStore[key];
+        int final_value = keyValueStore[key];
+        
         // TODO: Equals condition?
         if(lastUpdated < client_timestamp) {
             keyValueStore[key] = value;
@@ -124,6 +110,13 @@ int main(int argc, char** argv) {
     string ip_address = data["server_ip_list"][SERVER_ID];
     string port = data["server_port_list"][SERVER_ID];
     string address = ip_address + ":" + port;
+
+    // Initialize the maps
+    for(int i = 0; i < 1e6; i++) {
+        keyValueStore[i] = -1;
+        lastUpdatedStore[i] = -1;
+    }
+
     Run(address);
 
     return 0;

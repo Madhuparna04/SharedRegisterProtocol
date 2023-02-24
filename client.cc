@@ -148,17 +148,13 @@ class KeyValueStoreClient {
 void HandleGetPhaseResponse(const GetPhaseResponse& response) {
     if (response.request_id() == MY_REQUEST_ID) {
         // Lock for accesing the get_responses vector bec it is accessed by many threads
-        // gresponse_mutex.lock();
-        std::cout<<"Recieved get response for "<<MY_REQUEST_ID<<"\n";
+        std::cout<<"Client ID "<<MY_CLIENT_ID<<": Recieved get response for "<<MY_REQUEST_ID<<"\n";
         get_responses.push_back(response);
-        // gresponse_mutex.unlock();
 
         if(get_responses.size() == kExpectedResponses) {
             // Signal - main thread will resume execution now
-            // gresponse_count_cv.notify_all();
             gresponse_mutex.unlock();
-            std::cout<<"Now ending get phase "<<MY_REQUEST_ID<<"\n";
-            // signal_get_done.unlock();
+            std::cout<<MY_CLIENT_ID<<"Client ID "<<MY_CLIENT_ID<<"Now ending get phase "<<MY_REQUEST_ID<<"\n";
         }
     }
 }
@@ -166,23 +162,20 @@ void HandleGetPhaseResponse(const GetPhaseResponse& response) {
 void HandleSetPhaseResponse(const SetPhaseResponse& response) {
     if (response.request_id() == MY_REQUEST_ID) {
         // Lock for accesing the get_responses vector bec it is accessed by many threads
-        // sresponse_mutex.lock();
-        std::cout<<"Recieved set response for "<<MY_REQUEST_ID<<"\n";
+        std::cout<<"Client ID "<<MY_CLIENT_ID<<"Recieved set response for "<<MY_REQUEST_ID<<"\n";
         set_responses.push_back(response);
-        // sresponse_mutex.unlock();
 
         if(set_responses.size() == kExpectedResponses) {
             // Signal - main thread will resume execution now
-            // sresponse_count_cv.notify_all();
             sresponse_mutex.unlock();
-            std::cout<<"Now ending set phase "<<MY_REQUEST_ID<<"\n";
-            // signal_set_done.unlock();
+            std::cout<<"Client ID "<<MY_CLIENT_ID<<"Now ending set phase "<<MY_REQUEST_ID<<"\n";
         }
     }
 }
 
 void RunGetPhase(std::vector<std::string> servers, int client_id, int requestId, int key) {
-    for(int i = 0; i < servers.size(); i++) {
+    // Second check is added to stop sending more requests after enough responses are collected
+    for(int i = 0; i < servers.size() && get_responses.size() < kExpectedResponses; i++) {
         KeyValueStoreClient client(
             grpc::CreateChannel(
                 servers[i], 
@@ -190,37 +183,31 @@ void RunGetPhase(std::vector<std::string> servers, int client_id, int requestId,
             )
         );
 
-        std::cout<<"Sending <<"<<i<<" get request for request ID "<<requestId<<"\n";
+        std::cout<<"Client ID "<<MY_CLIENT_ID<<"Sending <<"<<i<<" get request for request ID "<<requestId<<"\n";
         client.GetPhase(client_id, i, requestId, key, HandleGetPhaseResponse);         
     }
 }
 
 
 void RunSetPhase(std::vector<std::string> servers, int client_id, int requestId, int key, int value, int local_timestamp) {
-    for(int i = 0; i < servers.size(); i++) {
+    // Second check is added to stop sending more requests after enough responses are collected
+    for(int i = 0; i < servers.size() && set_responses.size() < kExpectedResponses; i++) {
         KeyValueStoreClient client(
             grpc::CreateChannel(
                 servers[i], 
                 grpc::InsecureChannelCredentials()
             )
         );
-        std::cout<<"Sending <<"<<i<<" set request for request ID "<<requestId<<"\n";
+        std::cout<<"Client ID "<<MY_CLIENT_ID<<" Sending <<"<<i<<" set request for request ID "<<requestId<<"\n";
         client.SetPhase(client_id, i, requestId, key, value, local_timestamp, HandleSetPhaseResponse);
     }
 }
 
 void StartGetThread(int key) {
-    // Start of Get Phase
-    // This lock will only be released once Get Phase get enough responses
-    // std::cout<<"Taking get lock\n";
-    // signal_get_done.lock();
     RunGetPhase(servers, MY_CLIENT_ID, MY_REQUEST_ID, key);
 }
 
 void StartSetThread(int key, int val) {
-    // Start of Set Phase
-    // This lock will only be released once Set Phase get enough responses
-    // signal_set_done.lock();
     RunSetPhase(servers, MY_CLIENT_ID, MY_REQUEST_ID, key, val, keyTimestamps[key]);
 }
 
@@ -247,7 +234,8 @@ void do_read_and_write(char op, int repeat) {
     int val;
     std::random_device dev;
     std::mt19937 rng(dev());
-    std::uniform_int_distribution<std::mt19937::result_type> dist(1,100); 
+    std::uniform_int_distribution<std::mt19937::result_type> dist(1,1e6); 
+
     for(int i = 0; i < repeat ; ++i) {
         
         std::cout<<"====Starting new request====\n";
@@ -260,19 +248,17 @@ void do_read_and_write(char op, int repeat) {
             gresponse_mutex.lock();
         };
 
-        std::cout<<"Main is waiting for the Get signal\n";
+        // std::cout<<"Main is waiting for the Get signal\n";
         gresponse_mutex.lock();
 
         get_phase_thread.detach();
-        std::cout<<"Main Received Get signal - releasing lock\n";
+        // std::cout<<"Main Received Get signal - releasing lock\n";
         gresponse_mutex.unlock();
 
         // Find largest timestamp among received responses
-        bool isKeyPresentInAny = false;
         int max_timestamp = -100;
         int max_in = -1;
         for(int i = 0; i < get_responses.size(); i++) {
-            isKeyPresentInAny |= get_responses[i].is_key_present();
             if(get_responses[i].local_timestamp() > max_timestamp) {
                 max_timestamp = get_responses[i].local_timestamp();
                 max_in = i;
@@ -281,38 +267,25 @@ void do_read_and_write(char op, int repeat) {
 
         // Local timestamp changes to max + 1 for the key
         keyTimestamps[key] = max_timestamp + 1;
-        // MY_REQUEST_ID++;
+        MY_REQUEST_ID++;
 
         if(op == 'R') {
-            if(isKeyPresentInAny) {
-                // Value corresponding to the largest timestamp among majority
-                int value_read = get_responses[max_in].value();
 
-                // Start Set Phase in a thread
-                std::thread set_phase_thread(StartSetThread, key, value_read);
-                {
-                    sresponse_mutex.lock();
-                };
+            int value_read = get_responses[max_in].value();
 
-                std::cout<<"Main is waiting for the Set signal\n";
+            // Start Set Phase in a thread
+            std::thread set_phase_thread(StartSetThread, key, value_read);
+            {
                 sresponse_mutex.lock();
-                std::cout<<"Main Received Set signal - releasing lock\n";
-                sresponse_mutex.unlock();
+            };
 
-                // StartSetThread(key, value_read);
+            // std::cout<<"Main is waiting for the Set signal\n";
+            sresponse_mutex.lock();
+            // std::cout<<"Main Received Set signal - releasing lock\n";
+            sresponse_mutex.unlock();
 
-                // while(set_responses.size() < kExpectedResponses);
-
-                // std::unique_lock<std::mutex> slock(sresponse_mutex);
-                // gresponse_count_cv.wait(slock, []{return set_responses.size() == kExpectedResponses;});
-
-                // set_phase_thread.join();
-                set_phase_thread.detach();
-
-                std::cout<<"Client Id "<<MY_CLIENT_ID<<": R: value for key = "<<key<<" is "<<value_read<<" Op No. "<<i<<"\n";
-            } else {
-                std::cout<<"Client Id "<<MY_CLIENT_ID<<": R: key = "<<key<<" is not present."<<" Op No. "<< i << "\n";
-            }
+            std::cout<<"Client Id "<<MY_CLIENT_ID<<": Read complete for Request ID "<<MY_REQUEST_ID<<"\n";
+            set_phase_thread.detach();
         } else if(op == 'W'){
             // Start Set Phase in a thread
             std::thread set_phase_thread(StartSetThread, key, val);
@@ -320,28 +293,18 @@ void do_read_and_write(char op, int repeat) {
                 sresponse_mutex.lock();
             };
 
-            std::cout<<"Main is waiting for the Set signal\n";
+            // std::cout<<"Main is waiting for the Set signal\n";
             sresponse_mutex.lock();
-            std::cout<<"Main Received Set signal - releasing lock\n";
+            // std::cout<<"Main Received Set signal - releasing lock\n";
             sresponse_mutex.unlock();
 
-            // while(set_responses.size() < kExpectedResponses);
-            // std::unique_lock<std::mutex> slock(sresponse_mutex);
-            // gresponse_count_cv.wait(slock, []{return set_responses.size() == kExpectedResponses;});
-
-            // set_phase_thread.join();
-            std::cout<<"Client Id "<<MY_CLIENT_ID<<": Write complete for key = "<<key<<" Value = "<< val<<" Op No."<<i<<"\n";
+            std::cout<<"Client Id "<<MY_CLIENT_ID<<": Write complete for Request ID "<<MY_REQUEST_ID<<"\n";
             set_phase_thread.detach();
-        } else {
-            std::cout<<"Invalid Operation, terminating client.\n";
-            return;
-        }
+        } 
 
-        
+        MY_REQUEST_ID++;
         get_responses.clear();
         set_responses.clear();
-        MY_REQUEST_ID++;
-
     }
 }
 

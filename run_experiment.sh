@@ -11,7 +11,7 @@ sleep 2
 
 for (( i=1 ; i<=$num_writer ; i++ )); 
 do
-    ./cmake/build/client $((i-1)) config.json 100 0 &
+    ./cmake/build/client $((i-1)) config.json 1000 0 &
 done
 
 sleep 5
@@ -19,21 +19,21 @@ sleep 5
 total=$((num_writer + num_reader -1))
 for i in $(eval echo "{$num_writer..$total}")
 do
-    ./cmake/build/client $i config.json 0 100 &
+    ./cmake/build/client $i config.json 0 1000 &
 done
 
-sleep 10
+sleep 1000
 
 server_pid=`pgrep server`
 
 for pid in $server_pid
 do
-    kill $pid
+    sudo kill $pid
 done
 
 client_pid=`pgrep client`
 
 for pid in $client_pid
 do
-    kill $pid
+    sudo kill $pid
 done
