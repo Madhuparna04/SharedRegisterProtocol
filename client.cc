@@ -245,11 +245,15 @@ void do_read_and_write(char op, int repeat) {
         // Start of Get Phase
         std::thread get_phase_thread(StartGetThread, key); 
         {
+            cout<<"Get lock 1"<<endl;
             gresponse_mutex.lock();
+            cout<<"Got lock 1"<<endl;
         };
 
         // std::cout<<"Main is waiting for the Get signal\n";
+        cout<<"Get lock 2"<<endl;
         gresponse_mutex.lock();
+        cout<<"Got lock 2"<<endl;
 
         get_phase_thread.detach();
         // std::cout<<"Main Received Get signal - releasing lock\n";
@@ -276,30 +280,39 @@ void do_read_and_write(char op, int repeat) {
             // Start Set Phase in a thread
             std::thread set_phase_thread(StartSetThread, key, value_read);
             {
+                cout<<"Get lock 3"<<endl;
                 sresponse_mutex.lock();
+                cout<<"Got lock 3"<<endl;
             };
 
             // std::cout<<"Main is waiting for the Set signal\n";
+            cout<<"Get lock 4"<<endl;
             sresponse_mutex.lock();
+            cout<<"Got lock 4"<<endl;
             // std::cout<<"Main Received Set signal - releasing lock\n";
             sresponse_mutex.unlock();
 
-            std::cout<<"Client Id "<<MY_CLIENT_ID<<": Read complete for Request ID "<<MY_REQUEST_ID<<"\n";
+            std::cout<<"Client Id "<<MY_CLIENT_ID<<": Read complete for Request ID "<<MY_REQUEST_ID<<" key = "<<key<<" value = "<<value_read<<"\n";
             set_phase_thread.detach();
         } else if(op == 'W'){
             // Start Set Phase in a thread
             std::thread set_phase_thread(StartSetThread, key, val);
             {
+                cout<<"Get lock 4"<<endl;
                 sresponse_mutex.lock();
+                cout<<"Got lock 4"<<endl;
             };
 
             // std::cout<<"Main is waiting for the Set signal\n";
+            cout<<"Get lock 5"<<endl;
             sresponse_mutex.lock();
+            set_phase_thread.detach();
+            cout<<"Got lock 5"<<endl;
             // std::cout<<"Main Received Set signal - releasing lock\n";
             sresponse_mutex.unlock();
 
-            std::cout<<"Client Id "<<MY_CLIENT_ID<<": Write complete for Request ID "<<MY_REQUEST_ID<<"\n";
-            set_phase_thread.detach();
+            std::cout<<"Client Id "<<MY_CLIENT_ID<<": Write complete for Request ID "<<MY_REQUEST_ID<<" key = "<<key<<" value = "<<val<<"\n";
+            
         } 
 
         MY_REQUEST_ID++;

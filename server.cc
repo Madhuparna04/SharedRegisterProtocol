@@ -41,6 +41,7 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         response->set_key(key);
         response->set_value(val);
         response->set_local_timestamp(lastUpdated);
+        cout<<"Server get phase .." << SERVER_ID<<endl;
         return Status::OK;
     }
 
@@ -69,6 +70,7 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         response->set_key(key);
         response->set_value(final_value);
         response->set_local_timestamp(max(client_timestamp, lastUpdatedStore[key]));
+        cout<<"Server set phase .." << SERVER_ID<<endl;
         return Status::OK;
     }
 };
