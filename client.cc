@@ -154,7 +154,7 @@ void HandleGetPhaseResponse(const GetPhaseResponse& response) {
         if(get_responses.size() == kExpectedResponses) {
             // Signal - main thread will resume execution now
             gresponse_mutex.unlock();
-            std::cout<<MY_CLIENT_ID<<"Client ID "<<MY_CLIENT_ID<<"Now ending get phase "<<MY_REQUEST_ID<<"\n";
+            std::cout<<"Client ID "<<MY_CLIENT_ID<<" Now ending get phase "<<MY_REQUEST_ID<<"\n";
         }
     }
 }
@@ -162,13 +162,13 @@ void HandleGetPhaseResponse(const GetPhaseResponse& response) {
 void HandleSetPhaseResponse(const SetPhaseResponse& response) {
     if (response.request_id() == MY_REQUEST_ID) {
         // Lock for accesing the get_responses vector bec it is accessed by many threads
-        std::cout<<"Client ID "<<MY_CLIENT_ID<<"Recieved set response for "<<MY_REQUEST_ID<<"\n";
+        std::cout<<"Client ID "<<MY_CLIENT_ID<<" Recieved set response for "<<MY_REQUEST_ID<<"\n";
         set_responses.push_back(response);
 
         if(set_responses.size() == kExpectedResponses) {
             // Signal - main thread will resume execution now
             sresponse_mutex.unlock();
-            std::cout<<"Client ID "<<MY_CLIENT_ID<<"Now ending set phase "<<MY_REQUEST_ID<<"\n";
+            std::cout<<"Client ID "<<MY_CLIENT_ID<<" Now ending set phase "<<MY_REQUEST_ID<<"\n";
         }
     }
 }
