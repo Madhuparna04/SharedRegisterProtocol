@@ -19,8 +19,9 @@ using abd::SetPhaseResponse;
 
 using namespace std;
 
-unordered_map<int,int> keyValueStore;
-unordered_map<int,int> lastUpdatedStore;
+unordered_map<string,string> keyValueStore;
+unordered_map<string,int> lastUpdatedStore;
+std::hash<std::string> hasher;
 int SERVER_ID;
 
 class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
@@ -29,10 +30,10 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         int client = request->client();
         int server = request->server();
         int request_id = request->request_id();
-        int key = request->key();
+        std::string key = request->key();
 
         // Assuming all keys are present
-        int val = keyValueStore[key];
+        std::string val = keyValueStore[key];
         int lastUpdated = lastUpdatedStore[key];
 
         response->set_client(client);
@@ -49,13 +50,13 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         int client = request->client();
         int server = request->server();
         int request_id = request->request_id();
-        int key = request->key();
-        int value = request->value();
+        std::string key = request->key();
+        std::string value = request->value();
         int client_timestamp = request->local_timestamp();
 
 
         int lastUpdated = lastUpdatedStore[key];
-        int final_value = keyValueStore[key];
+        string final_value = keyValueStore[key];
         
         // TODO: Equals condition?
         if(lastUpdated < client_timestamp) {
@@ -89,6 +90,27 @@ void Run(std::string address) {
     server->Wait();
 }
 
+string covert_to_string28(int x) {
+    string int_string = std::to_string(x);
+    string zeros = "";
+    for(int i = 0; i < (28 - int_string.size()); i++) {
+        zeros += '0';
+    }
+    int_string = zeros + int_string;
+    return int_string;
+}
+
+void init_map() {
+    // Initialize the maps
+    for(int i = 0; i < 1e6; i++) {
+        string key = covert_to_string28(i);
+        auto hashed = hasher(key);
+        string val = to_string(hashed).substr(0,10);
+        keyValueStore[key] = val;
+        lastUpdatedStore[key] = -1;
+    }
+}
+
 int main(int argc, char** argv) {
     
     if (argc != 3) {
@@ -113,12 +135,7 @@ int main(int argc, char** argv) {
     string port = data["server_port_list"][SERVER_ID];
     string address = ip_address + ":" + port;
 
-    // Initialize the maps
-    for(int i = 0; i < 1e6; i++) {
-        keyValueStore[i] = -1;
-        lastUpdatedStore[i] = -1;
-    }
-
+    init_map();
     Run(address);
 
     return 0;
