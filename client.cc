@@ -7,6 +7,7 @@
 #include <mutex>
 #include <grpcpp/grpcpp.h>
 #include <condition_variable>
+#include <chrono>
 #include "abd.grpc.pb.h"
 #include "json.hpp"
 using json = nlohmann::json;
@@ -255,8 +256,12 @@ void do_read_and_write(char op, int repeat) {
     std::mt19937 rng(dev());
     std::uniform_int_distribution<std::mt19937::result_type> dist(1,1e6); 
 
+    long int max_response_time = 0;
+    long int min_response_time = INT_MAX;
+    long int sum_response_time = 0;
+
     for(int i = 0; i < repeat ; ++i) {
-        
+        auto start = std::chrono::high_resolution_clock::now();
         std::cout<<"====Starting new request====\n";
         key = covert_to_string28(dist(rng));    
         val = covert_to_string10(dist(rng));
@@ -264,15 +269,11 @@ void do_read_and_write(char op, int repeat) {
         // Start of Get Phase
         std::thread get_phase_thread(StartGetThread, key); 
         {
-            cout<<"Get lock 1"<<endl;
             gresponse_mutex.lock();
-            cout<<"Got lock 1"<<endl;
         };
 
         // std::cout<<"Main is waiting for the Get signal\n";
-        cout<<"Get lock 2"<<endl;
         gresponse_mutex.lock();
-        cout<<"Got lock 2"<<endl;
 
         get_phase_thread.detach();
         // std::cout<<"Main Received Get signal - releasing lock\n";
@@ -299,15 +300,11 @@ void do_read_and_write(char op, int repeat) {
             // Start Set Phase in a thread
             std::thread set_phase_thread(StartSetThread, key, value_read);
             {
-                cout<<"Get lock 3"<<endl;
                 sresponse_mutex.lock();
-                cout<<"Got lock 3"<<endl;
             };
 
             // std::cout<<"Main is waiting for the Set signal\n";
-            cout<<"Get lock 4"<<endl;
             sresponse_mutex.lock();
-            cout<<"Got lock 4"<<endl;
             // std::cout<<"Main Received Set signal - releasing lock\n";
             sresponse_mutex.unlock();
 
@@ -317,16 +314,12 @@ void do_read_and_write(char op, int repeat) {
             // Start Set Phase in a thread
             std::thread set_phase_thread(StartSetThread, key, val);
             {
-                cout<<"Get lock 4"<<endl;
                 sresponse_mutex.lock();
-                cout<<"Got lock 4"<<endl;
             };
 
             // std::cout<<"Main is waiting for the Set signal\n";
-            cout<<"Get lock 5"<<endl;
             sresponse_mutex.lock();
             set_phase_thread.detach();
-            cout<<"Got lock 5"<<endl;
             // std::cout<<"Main Received Set signal - releasing lock\n";
             sresponse_mutex.unlock();
 
@@ -337,6 +330,16 @@ void do_read_and_write(char op, int repeat) {
         MY_REQUEST_ID++;
         get_responses.clear();
         set_responses.clear();
+        auto stop = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count();
+        sum_response_time += duration;
+        max_response_time = max(max_response_time, duration);
+        min_response_time = min(min_response_time, duration);
+    }
+    if (repeat) {
+        double average_time = sum_response_time/repeat;
+        cout << "Average Time : "<<sum_response_time<< " Minimum Time : " << min_response_time << " Maximum Time : " << max_response_time <<" microseconds"<< endl;
+        cout <<" Client "<< MY_CLIENT_ID << " Average Get/Set Latency = "<< average_time/1000000 << " seconds \n Throughput = " << 1000000/average_time << " opertions per second" << endl;
     }
 }
 

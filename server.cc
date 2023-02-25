@@ -1,6 +1,7 @@
 #include <string>
 #include <grpcpp/grpcpp.h>
 #include <fstream>
+#include <signal.h>
 #include "abd.grpc.pb.h"
 #include <map>
 #include "json.hpp"
@@ -23,6 +24,12 @@ unordered_map<string,string> keyValueStore;
 unordered_map<string,int> lastUpdatedStore;
 std::hash<std::string> hasher;
 int SERVER_ID;
+int NUM_OPERATIONS = 0;
+
+void signal_callback_handler(int signum) {
+   cout<<"Server "<<SERVER_ID<<" Number of operations completed = "<< NUM_OPERATIONS<<endl;
+   exit(signum);
+}
 
 class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
 
@@ -72,6 +79,7 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         response->set_value(final_value);
         response->set_local_timestamp(max(client_timestamp, lastUpdatedStore[key]));
         cout<<"Server set phase .." << SERVER_ID<<endl;
+        NUM_OPERATIONS++;
         return Status::OK;
     }
 };
@@ -117,6 +125,7 @@ int main(int argc, char** argv) {
         std::cerr << "Usage: ./server"  << " <SERVER_ID>" << " <Config_File>"<< std::endl;
         return 1;
     }
+    signal(SIGINT, signal_callback_handler);
     SERVER_ID = stoi(argv[1]);
     string config_file = argv[2];
 
@@ -137,7 +146,6 @@ int main(int argc, char** argv) {
 
     init_map();
     Run(address);
-
     return 0;
 }
 
