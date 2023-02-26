@@ -25,9 +25,11 @@ unordered_map<string,int> lastUpdatedStore;
 std::hash<std::string> hasher;
 int SERVER_ID;
 int NUM_OPERATIONS = 0;
+int NUM_READS = 0;
+int NUM_WRITES = 0;
 
 void signal_callback_handler(int signum) {
-   cout<<"Server "<<SERVER_ID<<" Number of operations completed = "<< NUM_OPERATIONS<<endl;
+   cout<<"Server "<<SERVER_ID<<" Number of operations completed = "<< NUM_OPERATIONS << " Num Reads = " << NUM_READS << " Num Writes = " << NUM_WRITES<<endl;
    exit(signum);
 }
 
@@ -49,7 +51,7 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         response->set_key(key);
         response->set_value(val);
         response->set_local_timestamp(lastUpdated);
-        cout<<"Server get phase .." << SERVER_ID<<endl;
+        //cout<<"Server get phase .." << SERVER_ID<<endl;
         return Status::OK;
     }
 
@@ -60,7 +62,7 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         std::string key = request->key();
         std::string value = request->value();
         int client_timestamp = request->local_timestamp();
-
+        std::string op = request->op();
 
         int lastUpdated = lastUpdatedStore[key];
         string final_value = keyValueStore[key];
@@ -78,7 +80,11 @@ class KeyValueStoreImplementation final : public abd::KeyValueStore::Service {
         response->set_key(key);
         response->set_value(final_value);
         response->set_local_timestamp(max(client_timestamp, lastUpdatedStore[key]));
-        cout<<"Server set phase .." << SERVER_ID<<endl;
+        //cout<<"Server set phase .." << SERVER_ID<<endl;
+        if(op == "R")
+            NUM_READS++;
+        else if(op == "W")
+            NUM_WRITES++;
         NUM_OPERATIONS++;
         return Status::OK;
     }
