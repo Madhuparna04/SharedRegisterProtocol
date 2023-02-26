@@ -13,25 +13,24 @@ message GetPhaseRequest {
     int32 client = 1;
     int32 server = 2;
     int32 request_id = 3;
-    int32 key = 4;
+    string key = 4;
 }
 
 message GetPhaseResponse {
     int32 client = 1;
     int32 server = 2;
     int32 request_id = 3;
-    int32 key = 4;
-    int32 value = 5;
+    string key = 4;
+    string value = 5;
     int32 local_timestamp = 6;
-    bool is_key_present = 7;
 }
 
 message SetPhaseRequest {
     int32 client = 1;
     int32 server = 2;
     int32 request_id = 3;
-    int32 key = 4;
-    int32 value = 5;
+    string key = 4;
+    string value = 5;
     int32 local_timestamp = 6;
 }
 
@@ -39,29 +38,8 @@ message SetPhaseResponse {
     int32 client = 1;
     int32 server = 2;
     int32 request_id = 3;
-    int32 key = 4;
-    int32 value = 5;
+    string key = 4;
+    string value = 5;
     int32 local_timestamp = 6;
 }
 
-
-
-
-
-// The request message containing key and value
-message SetRequest {
-    int32 key = 1;
-    int32 value = 2;
-}
-
-// The response message containing response
-message SetResponse {
-}
-
-message GetRequest {
-    int32 key = 1;
-}
-
-message GetResponse {
-    int32 value = 2;
-}

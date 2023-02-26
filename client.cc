@@ -7,6 +7,7 @@
 #include <mutex>
 #include <grpcpp/grpcpp.h>
 #include <condition_variable>
+#include <chrono>
 #include "abd.grpc.pb.h"
 #include "json.hpp"
 using json = nlohmann::json;
@@ -40,7 +41,7 @@ std::condition_variable sresponse_count_cv;
 
 // TODO: Take from ARGS/develop a class
 int MY_CLIENT_ID;
-std::unordered_map<int,int> keyTimestamps;
+std::unordered_map<std::string,int> keyTimestamps;
 int MY_REQUEST_ID = 0;
 int NUM_WRITES = 0;
 int NUM_READS = 0;
@@ -49,7 +50,7 @@ class KeyValueStoreClient {
     public:
         KeyValueStoreClient(std::shared_ptr<Channel> channel) : stub_(KeyValueStore::NewStub(channel)) {}
 
-    void GetPhase(int client, int server, int requestId, int key, std::function<void(const GetPhaseResponse&)> callback) {
+    void GetPhase(int client, int server, int requestId, std::string key, std::function<void(const GetPhaseResponse&)> callback) {
 
         GetPhaseRequest request;
         request.set_client(client);
@@ -86,7 +87,7 @@ class KeyValueStoreClient {
         }
     }
 
-    void SetPhase(int client, int server, int requestId, int key, int value, int local_timestamp, std::function<void(const SetPhaseResponse&)> callback) {
+    void SetPhase(int client, int server, int requestId, std::string key, std::string value, int local_timestamp, std::function<void(const SetPhaseResponse&)> callback) {
         SetPhaseRequest request;
         request.set_client(client);
         request.set_server(server);
@@ -173,7 +174,7 @@ void HandleSetPhaseResponse(const SetPhaseResponse& response) {
     }
 }
 
-void RunGetPhase(std::vector<std::string> servers, int client_id, int requestId, int key) {
+void RunGetPhase(std::vector<std::string> servers, int client_id, int requestId, std::string key) {
     // Second check is added to stop sending more requests after enough responses are collected
     for(int i = 0; i < servers.size() && get_responses.size() < kExpectedResponses; i++) {
         KeyValueStoreClient client(
@@ -188,8 +189,7 @@ void RunGetPhase(std::vector<std::string> servers, int client_id, int requestId,
     }
 }
 
-
-void RunSetPhase(std::vector<std::string> servers, int client_id, int requestId, int key, int value, int local_timestamp) {
+void RunSetPhase(std::vector<std::string> servers, int client_id, int requestId, std::string key, std::string value, int local_timestamp) {
     // Second check is added to stop sending more requests after enough responses are collected
     for(int i = 0; i < servers.size() && set_responses.size() < kExpectedResponses; i++) {
         KeyValueStoreClient client(
@@ -203,11 +203,11 @@ void RunSetPhase(std::vector<std::string> servers, int client_id, int requestId,
     }
 }
 
-void StartGetThread(int key) {
+void StartGetThread(std::string key) {
     RunGetPhase(servers, MY_CLIENT_ID, MY_REQUEST_ID, key);
 }
 
-void StartSetThread(int key, int val) {
+void StartSetThread(std::string key, std::string val) {
     RunSetPhase(servers, MY_CLIENT_ID, MY_REQUEST_ID, key, val, keyTimestamps[key]);
 }
 
@@ -229,31 +229,51 @@ void parse_server_address(string config_file) {
     kExpectedResponses = ((servers.size()/2) + 1);
 }
 
+string covert_to_string28(int x) {
+    string int_string = std::to_string(x);
+    string zeros = "";
+    for(int i = 0; i < (28 - int_string.size()); i++) {
+        zeros += '0';
+    }
+    int_string = zeros + int_string;
+    return int_string;
+}
+
+string covert_to_string10(int x) {
+    string int_string = std::to_string(x);
+    string zeros = "";
+    for(int i = 0; i < (10 - int_string.size()); i++) {
+        zeros += '0';
+    }
+    int_string = zeros + int_string;
+    return int_string;
+}
+
 void do_read_and_write(char op, int repeat) {
-    int key;
-    int val;
+    std::string key;
+    std::string val;
     std::random_device dev;
     std::mt19937 rng(dev());
     std::uniform_int_distribution<std::mt19937::result_type> dist(1,1e6); 
 
+    long int max_response_time = 0;
+    long int min_response_time = INT_MAX;
+    long int sum_response_time = 0;
+
     for(int i = 0; i < repeat ; ++i) {
-        
+        auto start = std::chrono::high_resolution_clock::now();
         std::cout<<"====Starting new request====\n";
-        key = dist(rng);    
-        val = dist(rng);
+        key = covert_to_string28(dist(rng));    
+        val = covert_to_string10(dist(rng));
 
         // Start of Get Phase
         std::thread get_phase_thread(StartGetThread, key); 
         {
-            cout<<"Get lock 1"<<endl;
             gresponse_mutex.lock();
-            cout<<"Got lock 1"<<endl;
         };
 
         // std::cout<<"Main is waiting for the Get signal\n";
-        cout<<"Get lock 2"<<endl;
         gresponse_mutex.lock();
-        cout<<"Got lock 2"<<endl;
 
         get_phase_thread.detach();
         // std::cout<<"Main Received Get signal - releasing lock\n";
@@ -275,20 +295,16 @@ void do_read_and_write(char op, int repeat) {
 
         if(op == 'R') {
 
-            int value_read = get_responses[max_in].value();
+            std::string value_read = get_responses[max_in].value();
 
             // Start Set Phase in a thread
             std::thread set_phase_thread(StartSetThread, key, value_read);
             {
-                cout<<"Get lock 3"<<endl;
                 sresponse_mutex.lock();
-                cout<<"Got lock 3"<<endl;
             };
 
             // std::cout<<"Main is waiting for the Set signal\n";
-            cout<<"Get lock 4"<<endl;
             sresponse_mutex.lock();
-            cout<<"Got lock 4"<<endl;
             // std::cout<<"Main Received Set signal - releasing lock\n";
             sresponse_mutex.unlock();
 
@@ -298,16 +314,12 @@ void do_read_and_write(char op, int repeat) {
             // Start Set Phase in a thread
             std::thread set_phase_thread(StartSetThread, key, val);
             {
-                cout<<"Get lock 4"<<endl;
                 sresponse_mutex.lock();
-                cout<<"Got lock 4"<<endl;
             };
 
             // std::cout<<"Main is waiting for the Set signal\n";
-            cout<<"Get lock 5"<<endl;
             sresponse_mutex.lock();
             set_phase_thread.detach();
-            cout<<"Got lock 5"<<endl;
             // std::cout<<"Main Received Set signal - releasing lock\n";
             sresponse_mutex.unlock();
 
@@ -318,6 +330,16 @@ void do_read_and_write(char op, int repeat) {
         MY_REQUEST_ID++;
         get_responses.clear();
         set_responses.clear();
+        auto stop = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count();
+        sum_response_time += duration;
+        max_response_time = max(max_response_time, duration);
+        min_response_time = min(min_response_time, duration);
+    }
+    if (repeat) {
+        double average_time = sum_response_time/repeat;
+        cout << "Average Time : "<<sum_response_time<< " Minimum Time : " << min_response_time << " Maximum Time : " << max_response_time <<" microseconds"<< endl;
+        cout <<" Client "<< MY_CLIENT_ID << " Average Get/Set Latency = "<< average_time/1000000 << " seconds \n Throughput = " << 1000000/average_time << " opertions per second" << endl;
     }
 }
 
