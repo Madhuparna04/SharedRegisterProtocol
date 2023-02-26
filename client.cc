@@ -48,6 +48,7 @@ std::unordered_map<std::string,int> keyTimestamps;
 int MY_REQUEST_ID = 0;
 int NUM_OPS = 0;
 int PERCENTAGE = 50;
+int NUM_CLIENTS = 0;
 
 class KeyValueStoreClient {
     public:
@@ -347,6 +348,7 @@ void do_read_and_write(int repeat, int percentage) {
         lat_file <<duration<<"\n";
     }
     if (repeat) {
+        lat_file << sum_response_time<<"\n";
         double average_time = sum_response_time/repeat;
         cout << "Average Time : "<<average_time<< " Minimum Time : " << min_response_time << " Maximum Time : " << max_response_time <<" microseconds"<< endl;
         cout <<" Client "<< MY_CLIENT_ID << " Average Get/Set Latency = "<< average_time/1000000 << " seconds \n Throughput = " << 1000000/average_time << " opertions per second" << endl;
@@ -355,16 +357,17 @@ void do_read_and_write(int repeat, int percentage) {
 
 int main(int argc, char* argv[]){
 
-    if (argc != 5) {
-        std::cerr << "Usage: ./client"  << " <Client_Id> <Config_file> <NUM_OPS> <PERCENTAGE of R/W>" << std::endl;
+    if (argc != 6) {
+        std::cerr << "Usage: ./client"  << " <Client_Id> <Config_file> <NUM_OPS> <PERCENTAGE of R/W> <NUM_CLIENTS>" << std::endl;
         return 1;
     }
     MY_CLIENT_ID = std::stoi(argv[1]);
     parse_server_address(argv[2]);
     NUM_OPS = std::stoi(argv[3]);
     PERCENTAGE = std::stoi(argv[4]);
+    NUM_CLIENTS = std::stoi(argv[5]);
     MY_REQUEST_ID = 1;
-    string file_name = "latency_" + to_string(MY_CLIENT_ID) + ".txt";
+    string file_name = "latency_" + to_string(MY_CLIENT_ID) + "_" + to_string(NUM_CLIENTS) +  ".txt";
     lat_file.open (file_name.c_str());
     do_read_and_write(NUM_OPS, PERCENTAGE);
     lat_file.close();
