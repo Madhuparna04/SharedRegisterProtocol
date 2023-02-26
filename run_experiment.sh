@@ -9,12 +9,14 @@ done
 
 sleep 5
 
+ops=`echo "scale=0 ; 10240 / $num_client" | bc`
+
 for (( i=1 ; i<=$num_client ; i++ )); 
 do
-    ./cmake/build/client $((i-1)) config.json 1000 $rw_per &
+    ./cmake/build/client $((i-1)) config.json $ops $rw_per $num_client &
 done
 
-sleep 20
+sleep 3
 
 server_pid=`pgrep server`
 
@@ -24,7 +26,7 @@ do
     break
 done
 
-sleep 30
+sleep 200
 
 server_pid=`pgrep server`
 
