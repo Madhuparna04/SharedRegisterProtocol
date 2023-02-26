@@ -45,6 +45,7 @@ ofstream lat_file;
 // TODO: Take from ARGS/develop a class
 int MY_CLIENT_ID;
 std::unordered_map<std::string,int> keyTimestamps;
+std::vector<string> queryStrings;
 int MY_REQUEST_ID = 0;
 int NUM_OPS = 0;
 int PERCENTAGE = 50;
@@ -234,24 +235,26 @@ void parse_server_address(string config_file) {
     kExpectedResponses = ((servers.size()/2) + 1);
 }
 
-string covert_to_string28(int x) {
-    string int_string = std::to_string(x);
-    string zeros = "";
-    for(int i = 0; i < (28 - int_string.size()); i++) {
-        zeros += '0';
+string covert_to_string_x_bytes(string int_string, int num_bytes) {
+    // string int_string = std::to_string(num);
+    if(num_bytes < int_string.size()) {
+        return int_string.substr(int_string.size() - num_bytes, int_string.size());
+    } else {
+        string zeros = "";
+        for(int i = 0; i < (num_bytes - int_string.size()); i++) {
+            zeros += '0';
+        }
+        int_string = zeros + int_string;
+        return int_string;
     }
-    int_string = zeros + int_string;
-    return int_string;
 }
 
-string covert_to_string10(int x) {
-    string int_string = std::to_string(x);
-    string zeros = "";
-    for(int i = 0; i < (10 - int_string.size()); i++) {
-        zeros += '0';
-    }
-    int_string = zeros + int_string;
-    return int_string;
+int min(int x, int y) {
+    return (x < y) ? x : y;
+}
+
+int max(int x, int y) {
+    return (x > y) ? x : y;
 }
 
 void do_read_and_write(int repeat, int percentage) {
@@ -259,7 +262,7 @@ void do_read_and_write(int repeat, int percentage) {
     std::string val;
     std::random_device dev;
     std::mt19937 rng(dev());
-    std::uniform_int_distribution<std::mt19937::result_type> dist(1,1e6);
+    std::uniform_int_distribution<std::mt19937::result_type> dist(0,1e6-1);
     std::uniform_int_distribution<std::mt19937::result_type> dist100(1,100); 
 
     long int max_response_time = 0;
@@ -269,8 +272,10 @@ void do_read_and_write(int repeat, int percentage) {
     for(int i = 0; i < repeat ; ++i) {
         auto start = std::chrono::high_resolution_clock::now();
         //std::cout<<"====Starting new request====\n";
-        key = covert_to_string28(dist(rng));    
-        val = covert_to_string10(dist(rng));
+        // 28 byte string of a random int in range
+        key = queryStrings[dist(rng)]; 
+        // 10 byte string of any other random int in range
+        val = covert_to_string_x_bytes(queryStrings[dist(rng)], 10); 
 
         // Start of Get Phase
         std::thread get_phase_thread(StartGetThread, key); 
@@ -355,6 +360,12 @@ void do_read_and_write(int repeat, int percentage) {
     }
 }
 
+void init_query_strings() {
+    for(int i = 0; i < 1e6; i++) {
+        queryStrings[i] = covert_to_string_x_bytes(std::to_string(i), 28);
+    }
+}
+
 int main(int argc, char* argv[]){
 
     if (argc != 6) {
@@ -369,6 +380,7 @@ int main(int argc, char* argv[]){
     MY_REQUEST_ID = 1;
     string file_name = "latency_" + to_string(MY_CLIENT_ID) + "_" + to_string(NUM_CLIENTS) +  ".txt";
     lat_file.open (file_name.c_str());
+    init_query_strings();
     do_read_and_write(NUM_OPS, PERCENTAGE);
     lat_file.close();
     return 0;
