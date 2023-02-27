@@ -26,7 +26,7 @@ do
     break
 done
 
-sleep 200
+sleep 300
 
 server_pid=`pgrep server`
 

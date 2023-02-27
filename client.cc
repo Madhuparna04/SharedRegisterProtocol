@@ -362,7 +362,7 @@ void do_read_and_write(int repeat, int percentage) {
 
 void init_query_strings() {
     for(int i = 0; i < 1e6; i++) {
-        queryStrings[i] = covert_to_string_x_bytes(std::to_string(i), 28);
+        queryStrings.push_back(covert_to_string_x_bytes(std::to_string(i), 28));
     }
 }
 
@@ -378,7 +378,7 @@ int main(int argc, char* argv[]){
     PERCENTAGE = std::stoi(argv[4]);
     NUM_CLIENTS = std::stoi(argv[5]);
     MY_REQUEST_ID = 1;
-    string file_name = "latency_" + to_string(MY_CLIENT_ID) + "_" + to_string(NUM_CLIENTS) +  ".txt";
+    string file_name = "results/" + to_string(PERCENTAGE) +"/latency_" + to_string(MY_CLIENT_ID) + "_" + to_string(NUM_CLIENTS) +  ".txt";
     lat_file.open (file_name.c_str());
     init_query_strings();
     do_read_and_write(NUM_OPS, PERCENTAGE);
