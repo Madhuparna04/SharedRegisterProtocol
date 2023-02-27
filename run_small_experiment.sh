@@ -9,24 +9,14 @@ done
 
 sleep 5
 
-ops=`echo "scale=0 ; 10240 / $num_client" | bc`
+ops=`echo "scale=0 ; 1024 / $num_client" | bc`
 
 for (( i=1 ; i<=$num_client ; i++ )); 
 do
     ./cmake/build/client $((i-1)) config.json $ops $rw_per $num_client &
 done
 
-sleep 3
-
-server_pid=`pgrep replica`
-
-for pid in $server_pid
-do
-    sudo kill -INT $pid
-    break
-done
-
-sleep 300
+sleep 30
 
 server_pid=`pgrep replica`
 

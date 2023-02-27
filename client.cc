@@ -355,8 +355,8 @@ void do_read_and_write(int repeat, int percentage) {
     if (repeat) {
         lat_file << sum_response_time<<"\n";
         double average_time = sum_response_time/repeat;
-        cout << "Average Time : "<<average_time<< " Minimum Time : " << min_response_time << " Maximum Time : " << max_response_time <<" microseconds"<< endl;
         cout <<" Client "<< MY_CLIENT_ID << " Average Get/Set Latency = "<< average_time/1000000 << " seconds \n Throughput = " << 1000000/average_time << " opertions per second" << endl;
+        cout <<" Client "<< MY_CLIENT_ID << " Minimum Latency = : " << min_response_time << " Maximum Latency = : " << max_response_time<<" microseconds"<< endl;
     }
 }
 

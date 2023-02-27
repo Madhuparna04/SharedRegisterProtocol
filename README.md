@@ -6,8 +6,12 @@ Shared Register Protocol using gRPC for communication between clients and server
 
 1. Install gRPC : https://grpc.io/docs/languages/cpp/quickstart/
 2. Run `./build.sh`
+3. Run `./run_small_experiment.sh 5 4 50` to laucnh 5 replicas, 4 clients with 50% R/W ratio.
+
+OR
+
 3. `cd cmake/build`
-4. Run `./server <SERVER_ID> <Config_file>` (Example: `./server 2 ../../config.json`
+4. Run `./replica <SERVER_ID> <Config_file>` (Example: `./server 2 ../../config.json`
  (Server id should be between 0 and num_servers - 1, num_servers declared in config.json))
 5. In a new terminal run `./client <CLIENT_ID> <Config_file> <NUM_OPS> <PERCENTAGE OF R/W> <NUM_CLIENTS>` (Example: ./client 4 ../../config.json 100 40 5)
 
@@ -22,7 +26,7 @@ to launch 3 servers, 2 clients and each client performing 40% reads and 60% writ
 1. Edit the remote_config.json file to update the ip address of the 5 replicas running the server.
 
 `cd cmake/build`
-`./server <SERVER_ID> ../../remote_config.json`
+`./replica <SERVER_ID> ../../remote_config.json`
 
 2. After starting the servers, run the followig on a different node for running 2 clients with 50% R/W.:
 

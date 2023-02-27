@@ -99,7 +99,10 @@ void Run(std::string address) {
     builder.RegisterService(&service);
 
     std::unique_ptr<Server> server(builder.BuildAndStart());
-    std::cout << "Server listening on port: " << address << std::endl;
+    std::cout << "Server " << SERVER_ID <<": listening on port: " << address << std::endl;
+    auto start = std::chrono::system_clock::now();
+    std::time_t  start_time = std::chrono::system_clock::to_time_t(start);
+    cout<<"Server start time: "<< std::ctime(&start_time)<<endl;
 
     server->Wait();
 }

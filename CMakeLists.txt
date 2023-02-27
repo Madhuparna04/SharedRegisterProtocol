@@ -44,9 +44,9 @@ add_custom_command(
 # Include generated *.pb.h files
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
-# Targets (client|server)
+# Targets (client|replica)
 foreach(_target
-  client server)
+  client replica)
   add_executable(${_target} "${_target}.cc"
     ${hw_proto_srcs}
     ${hw_grpc_srcs})
