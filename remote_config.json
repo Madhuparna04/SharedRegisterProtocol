@@ -1,0 +1,5 @@
+{   
+    "num_servers": "5",
+    "server_ip_list": ["ip1", "ip2", "ip3", "ip4", "ip5"],
+    "server_port_list": ["3000", "3000", "3000", "3000", "3000"]
+}
