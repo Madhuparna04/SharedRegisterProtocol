@@ -22,14 +22,13 @@ def get_experiment(num_clients):
         percentile =  np.percentile(latency, 99)
     throughput = (total_ops*1000000)/cumu_time
     th_graph.append(throughput)
-    lat_graph.append(avg_latency)
+    lat_graph.append(avg_latency/1000000)
     print(throughput)
 
 experiment = [1,2,4,8,16,32]
 for exp in experiment:
     get_experiment(exp)
-plt.plot(experiment, th_graph)
-plt.savefig("throughput.png")
-plt.clf()
-plt.plot(experiment, lat_graph)
-plt.savefig("latency.png")
+plt.plot(th_graph, lat_graph)
+plt.xlabel("Throughput (No. of Operations per second)")
+plt.ylabel("Avg Latency (seconds)")
+plt.savefig("latency_throughput.png")
