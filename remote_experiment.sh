@@ -8,7 +8,7 @@ do
     ./cmake/build/client $((i-1)) remote_config.json $ops $rw_per $num_client &
 done
 
-sleep 200
+sleep 300
 
 client_pid=`pgrep client`
 
