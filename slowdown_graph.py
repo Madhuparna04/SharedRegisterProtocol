@@ -32,7 +32,7 @@ def get_experiment(protocol):
     
     return mean_all_throughput, x_ax
 
-
+plt.title("Throughput with 1 slowed replica or leader(etcd)\nwith 50% reads and 50% writes and 8 clients")
 plt.xlabel("Timestep (x*50 operations)")
 plt.ylabel("Throughput (No. of Operations per second)")
 
@@ -43,7 +43,7 @@ test_proto = ["etcd", "SharedReg"]
 for proto in test_proto:
     th_graph,x_axis=get_experiment(proto)
     print(len(th_graph))
-    plt.plot(x_axis, th_graph, label="50% Reads, 50% Writes with 8 clients")
+    plt.plot(x_axis, th_graph, label=proto)
 
 plt.legend(loc="upper left")
 # plt.show()
